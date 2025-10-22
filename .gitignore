@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build
+.next/
+dist/
+build/
+
+# Env
+.env
+.env.local
+.env*.local
+
+# Logs
+*.log
+
+# Streams
+streams/
+*.m3u8
+*.ts
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.vscode-server/
+
+# Backups
+*.tar.gz
+*.zip
+
+# Cache
+.npm/
+.cache/
