@@ -5,22 +5,28 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 // Fix Leaflet default icon issue
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+if (typeof window !== 'undefined') {
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  });
+}
 
 // Custom marker icon (blue pin seperti referensi)
-const customIcon = L.icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+const createCustomIcon = () => {
+  if (typeof window === 'undefined') return null;
+  
+  return L.icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+};
 
 export default function InteractiveMap() {
   const mapRef = useRef(null);
@@ -40,12 +46,12 @@ export default function InteractiveMap() {
         console.error('Error fetching streams:', error);
         setLoading(false);
         
-        // Fallback data untuk testing (hapus nanti kalau backend udah jalan)
+        // Fallback data untuk testing
         setStreams([
           {
             id: 1,
             name: 'Zen Luxury Complex',
-            description: 'Construction site monitoring',
+            description: 'Construction site monitoring - Kuta',
             latitude: -8.670458,
             longitude: 115.212631,
             status: 'active',
@@ -54,11 +60,11 @@ export default function InteractiveMap() {
           {
             id: 2,
             name: 'Beachfront Villa Project',
-            description: 'Ongoing construction',
-            latitude: -8.748928,
+            description: 'Ongoing construction - Seminyak',
+            latitude: -8.691111,
             longitude: 115.168105,
-            status: 'active',
-            hlsPath: '/streams/stream2/index.m3u8'
+            status: 'inactive',
+            hlsPath: null
           }
         ]);
       }
@@ -69,7 +75,7 @@ export default function InteractiveMap() {
 
   // Initialize map
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    if (!mapRef.current || mapInstanceRef.current || typeof window === 'undefined') return;
 
     // Create map centered on Bali
     const map = L.map(mapRef.current, {
@@ -98,9 +104,10 @@ export default function InteractiveMap() {
 
   // Add markers when streams data is loaded
   useEffect(() => {
-    if (!mapInstanceRef.current || streams.length === 0) return;
+    if (!mapInstanceRef.current || streams.length === 0 || typeof window === 'undefined') return;
 
     const map = mapInstanceRef.current;
+    const customIcon = createCustomIcon();
 
     // Clear existing markers
     map.eachLayer((layer) => {
@@ -109,11 +116,25 @@ export default function InteractiveMap() {
       }
     });
 
-    // Add markers for each stream
-    streams.forEach((stream) => {
-      const marker = L.marker([stream.latitude, stream.longitude], {
-        icon: customIcon
-      }).addTo(map);
+  // Add markers when streams data is loaded
+  useEffect(() => {
+  if (!mapInstanceRef.current || typeof window === 'undefined') return;
+  
+  // Validate streams is array
+  if (!Array.isArray(streams)) {
+    console.error('Streams is not an array:', typeof streams, streams);
+    return;
+  }
+  
+  if (streams.length === 0) {
+    console.log('No streams available');
+    return;
+  }
+
+  const map = mapInstanceRef.current;
+  const customIcon = createCustomIcon();
+
+  // Rest of code...
 
       // Create popup content
       const popupContent = `
@@ -132,7 +153,7 @@ export default function InteractiveMap() {
                 controls 
                 style="width: 100%; height: 200px; object-fit: cover;"
                 muted
-                autoplay
+                playsinline
               >
                 Your browser does not support video playback.
               </video>
@@ -143,13 +164,13 @@ export default function InteractiveMap() {
             </div>
           `}
           
-          <div style="display: flex; gap: 8px;">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <span style="padding: 4px 8px; background: ${stream.status === 'active' ? '#10b981' : '#6b7280'}; color: white; border-radius: 4px; font-size: 12px;">
               ${stream.status === 'active' ? '🟢 Active' : '⚫ Inactive'}
             </span>
             <a 
               href="/dashboard" 
-              style="padding: 4px 12px; background: #3b82f6; color: white; border-radius: 4px; font-size: 12px; text-decoration: none;"
+              style="padding: 4px 12px; background: #3b82f6; color: white; border-radius: 4px; font-size: 12px; text-decoration: none; display: inline-block;"
             >
               View Details →
             </a>
@@ -178,7 +199,7 @@ export default function InteractiveMap() {
             hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
               videoElement.play().catch(e => console.log('Autoplay prevented:', e));
             });
-          } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+          } else if (videoElement && videoElement.canPlayType('application/vnd.apple.mpegurl')) {
             // Safari native HLS support
             videoElement.src = `http://localhost:5000${stream.hlsPath}`;
             videoElement.addEventListener('loadedmetadata', () => {

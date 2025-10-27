@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
@@ -49,7 +51,7 @@ export default function HomePage() {
         <InteractiveMap />
       </main>
 
-      {/* Info Panel (Optional) */}
+      {/* Info Panel */}
       <div className="fixed bottom-6 left-6 bg-gray-900/90 backdrop-blur-md border border-gray-800 rounded-xl p-4 shadow-2xl max-w-xs z-40">
         <h3 className="font-semibold text-sm mb-2 text-gray-300">
           📍 Interactive Map
