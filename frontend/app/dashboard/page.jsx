@@ -29,6 +29,10 @@ export default function Dashboard() {
   })
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // ✨ NEW: Preview modal state
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [previewStream, setPreviewStream] = useState(null)
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -41,6 +45,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
+
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -238,6 +243,42 @@ export default function Dashboard() {
     }
   }
 
+  // ✨ NEW: Preview modal functions
+  const openPreviewModal = (stream) => {
+    setPreviewStream(stream)
+    setShowPreviewModal(true)
+  }
+
+  const closePreviewModal = () => {
+    setShowPreviewModal(false)
+    setPreviewStream(null)
+  }
+
+  // ✨ NEW: HLS initialization for preview
+  useEffect(() => {
+    if (showPreviewModal && previewStream && previewStream.status === 'active') {
+      const timer = setTimeout(() => {
+        const videoElement = document.getElementById('preview-video')
+        if (videoElement && window.Hls && window.Hls.isSupported()) {
+          const hls = new window.Hls()
+          hls.loadSource(`http://localhost:5000${previewStream.hlsPath}`)
+          hls.attachMedia(videoElement)
+          
+          hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+            videoElement.play().catch(e => console.log('Autoplay prevented:', e))
+          })
+        } else if (videoElement && videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+          videoElement.src = `http://localhost:5000${previewStream.hlsPath}`
+          videoElement.addEventListener('loadedmetadata', () => {
+            videoElement.play().catch(e => console.log('Autoplay prevented:', e))
+          })
+        }
+      }, 500)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [showPreviewModal, previewStream])
+
   const handleDeleteConfirm = async () => {
     setIsDeleting(true)
     try {
@@ -388,6 +429,16 @@ export default function Dashboard() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
+                        {/* ✨ PREVIEW BUTTON - Shows when active */}
+                        {stream.status === 'active' && (
+                          <button
+                            onClick={() => openPreviewModal(stream)}
+                            className="px-3 py-1.5 rounded-lg border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 transition text-sm"
+                          >
+                            Preview
+                          </button>
+                        )}
+                        
                         {/* ✅ START BUTTON - Shows when inactive */}
                         {stream.status === 'inactive' && (
                           <button
@@ -519,6 +570,92 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ✨ PREVIEW MODAL */}
+      {showPreviewModal && previewStream && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-white/10">
+              <div>
+                <h3 className="text-2xl font-bold text-white">{previewStream.name}</h3>
+                <p className="text-gray-400 text-sm mt-1">{previewStream.description}</p>
+              </div>
+              <button
+                onClick={closePreviewModal}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Body - Video Player */}
+            <div className="p-6">
+              {previewStream.status === 'active' && previewStream.hlsPath ? (
+                <div className="bg-black rounded-lg overflow-hidden">
+                  <video 
+                    id="preview-video"
+                    controls
+                    autoPlay
+                    muted
+                    className="w-full h-auto"
+                    style={{ maxHeight: '500px' }}
+                  >
+                    Your browser does not support video playback.
+                  </video>
+                  
+                  {/* Status Bar */}
+                  <div className="bg-gray-900/50 backdrop-blur-sm p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-green-400 text-sm font-semibold">LIVE</span>
+                    </div>
+                    <span className="text-gray-400 text-xs">
+                      📍 {previewStream.latitude.toFixed(5)}, {previewStream.longitude.toFixed(5)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-lg p-12 text-center">
+                  <svg className="w-24 h-24 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <p className="text-gray-400 text-lg">Stream is currently offline</p>
+                  <p className="text-gray-500 text-sm mt-2">Start the stream to begin preview</p>
+                </div>
+              )}
+
+              {/* Stream Info */}
+              <div className="mt-6 grid grid-cols-2 gap-4">
+                <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-lg p-4">
+                  <p className="text-gray-400 text-xs uppercase mb-1">Status</p>
+                  <p className="text-white font-semibold">
+                    {previewStream.status === 'active' ? '🟢 Active' : '⚫ Inactive'}
+                  </p>
+                </div>
+                <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-lg p-4">
+                  <p className="text-gray-400 text-xs uppercase mb-1">RTSP URL</p>
+                  <p className="text-white font-mono text-xs truncate" title={previewStream.rtspUrl}>
+                    {previewStream.rtspUrl}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end gap-3 p-6 border-t border-white/10">
+              <button
+                onClick={closePreviewModal}
+                className="px-6 py-2 rounded-lg border border-white/20 text-white hover:bg-white/5 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmModal
         isOpen={deleteModal.isOpen}
         onClose={() => setDeleteModal({ isOpen: false, streamId: null, streamName: '' })}
@@ -527,6 +664,9 @@ export default function Dashboard() {
         message={`Yakin mau hapus stream "${deleteModal.streamName}"?`}
         isLoading={isDeleting}
       />
+      
+      {/* HLS.js library */}
+      <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     </div>
   )
 }
