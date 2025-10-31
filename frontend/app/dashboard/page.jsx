@@ -188,6 +188,32 @@ export default function Dashboard() {
     }
   }
 
+  // ✅ NEW: START STREAM FUNCTION
+  const startStream = async (id) => {
+    const loadingToast = toast.loading('Memulai stream...')
+    try {
+      const res = await fetch(`http://localhost:5000/api/streams/${id}/start`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      })
+      
+      if (res.ok) {
+        toast.dismiss(loadingToast)
+        toast.success('Stream berhasil dimulai!')
+        fetchStreams()
+      } else {
+        const error = await res.json()
+        toast.dismiss(loadingToast)
+        toast.error(error.error || 'Gagal memulai stream!')
+      }
+    } catch (error) {
+      toast.dismiss(loadingToast)
+      toast.error('Error memulai stream!')
+    }
+  }
+
   const stopStream = async (id) => {
     const loadingToast = toast.loading('Menghentikan stream...')
     try {
@@ -362,6 +388,26 @@ export default function Dashboard() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
+                        {/* ✅ START BUTTON - Shows when inactive */}
+                        {stream.status === 'inactive' && (
+                          <button
+                            onClick={() => startStream(stream.id)}
+                            className="px-3 py-1.5 rounded-lg border border-green-500/50 text-green-400 hover:bg-green-500/10 transition text-sm"
+                          >
+                            Start
+                          </button>
+                        )}
+                        
+                        {/* STOP BUTTON - Shows when active */}
+                        {stream.status === 'active' && (
+                          <button
+                            onClick={() => stopStream(stream.id)}
+                            className="px-3 py-1.5 rounded-lg border border-orange-500/50 text-orange-400 hover:bg-orange-500/10 transition text-sm"
+                          >
+                            Stop
+                          </button>
+                        )}
+                        
                         <button
                           onClick={() => openModal(stream)}
                           className="px-3 py-1.5 rounded-lg border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition text-sm"
