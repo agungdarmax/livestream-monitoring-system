@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
+import { useAuth } from '@/hooks/useAuth' // 🔒 Custom auth hook
 import StreamSkeleton from '@/components/StreamSkeleton'
 import ConfirmModal from '@/components/ConfirmModal'
 
@@ -15,8 +15,9 @@ const MapPicker = dynamic(() => import('@/components/MapPicker'), {
 })
 
 export default function Dashboard() {
-  const router = useRouter()
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  // 🔒 USE CUSTOM AUTH HOOK - Much cleaner!
+  const { isAuthenticated, isLoading: authLoading, user, logout } = useAuth(true)
+
   const [streams, setStreams] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -46,36 +47,12 @@ export default function Dashboard() {
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
 
-  // 🔒 STRONGER AUTH PROTECTION
+  // Fetch streams only when authenticated
   useEffect(() => {
-    const checkAuth = () => {
-      const token = localStorage.getItem('token')
-      
-      console.log('🔐 Auth Check - Token:', token ? 'EXISTS' : 'MISSING')
-      
-      if (!token) {
-        console.log('❌ No token found - Redirecting to login')
-        toast.error('Please login first!')
-        router.replace('/login') // Use replace instead of push
-        return false
-      }
-      
-      setIsAuthenticated(true)
-      return true
-    }
-
-    const isAuth = checkAuth()
-    if (isAuth) {
+    if (isAuthenticated && !authLoading) {
       fetchStreams()
     }
-  }, [router])
-
-  // 🔒 PREVENT RENDERING IF NOT AUTHENTICATED
-  useEffect(() => {
-    if (!isAuthenticated && !loading) {
-      router.replace('/login')
-    }
-  }, [isAuthenticated, loading, router])
+  }, [isAuthenticated, authLoading])
 
   const fetchStreams = async () => {
     setLoading(true)
@@ -99,8 +76,7 @@ export default function Dashboard() {
         setStreams(data)
       } else if (res.status === 401) {
         toast.error('Session expired! Please login again')
-        localStorage.removeItem('token')
-        router.replace('/login')
+        logout() // Use the logout from hook
       } else {
         toast.error('Failed to fetch streams!')
       }
@@ -111,12 +87,6 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    toast.success('Logged out successfully!')
-    router.replace('/login')
   }
 
   const openModal = (stream = null) => {
@@ -362,8 +332,8 @@ export default function Dashboard() {
     toast.success('Coordinates selected from map!')
   }
 
-  // 🔒 DON'T RENDER IF NOT AUTHENTICATED
-  if (!isAuthenticated) {
+  // 🔒 SHOW LOADING WHILE CHECKING AUTH
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -372,6 +342,11 @@ export default function Dashboard() {
         </div>
       </div>
     )
+  }
+
+  // 🔒 DON'T RENDER IF NOT AUTHENTICATED (hook will handle redirect)
+  if (!isAuthenticated) {
+    return null
   }
 
   if (loading) {
@@ -398,7 +373,7 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-white">REMARC Admin Dashboard</h1>
           <button
-            onClick={handleLogout}
+            onClick={logout}
             className="px-4 py-2 rounded-lg border border-red-500/50 text-red-400 hover:bg-red-500/10 transition"
           >
             Logout
@@ -503,6 +478,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* MODALS - Same as before, keeping them for completeness */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
