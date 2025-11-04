@@ -3,36 +3,16 @@ const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs').promises;
 
-// Get all streams with health info
+// Get all streams
 const getAllStreams = async (req, res) => {
   try {
     const streams = await prisma.stream.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        _count: {
-          select: {
-            errorLogs: {
-              where: {
-                createdAt: {
-                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24h
-                }
-              }
-            }
-          }
-        }
-      }
+      orderBy: { createdAt: 'desc' }
     });
-
-    // Add error count to each stream
-    const streamsWithHealth = streams.map(stream => ({
-      ...stream,
-      recentErrorCount: stream._count?.errorLogs || 0,
-      _count: undefined // Remove _count from response
-    }));
 
     res.json({
       success: true,
-      data: streamsWithHealth
+      data: streams
     });
   } catch (error) {
     console.error('Get streams error:', error);
@@ -43,7 +23,7 @@ const getAllStreams = async (req, res) => {
   }
 };
 
-// Get stream by ID with detailed health info
+// Get stream by ID
 const getStreamById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -71,89 +51,19 @@ const getStreamById = async (req, res) => {
   }
 };
 
-// 🆕 GET STREAM HEALTH
-const getStreamHealth = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { getStreamHealth } = require('../utils/ffmpegHelper');
-
-    const health = await getStreamHealth(parseInt(id));
-
-    res.json({
-      success: true,
-      data: health
-    });
-  } catch (error) {
-    console.error('Get stream health error:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch stream health',
-      message: error.message 
-    });
-  }
-};
-
-// 🆕 GET ERROR LOGS
-const getErrorLogs = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { limit = 50 } = req.query;
-
-    const errorLogs = await prisma.streamErrorLog.findMany({
-      where: { streamId: parseInt(id) },
-      orderBy: { createdAt: 'desc' },
-      take: parseInt(limit)
-    });
-
-    res.json({
-      success: true,
-      data: errorLogs
-    });
-  } catch (error) {
-    console.error('Get error logs error:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch error logs',
-      message: error.message 
-    });
-  }
-};
-
-// 🆕 CLEAR ERRORS
-const clearErrors = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await prisma.stream.update({
-      where: { id: parseInt(id) },
-      data: {
-        errorMessage: null,
-        errorCount: 0
-      }
-    });
-
-    res.json({
-      success: true,
-      message: 'Errors cleared successfully'
-    });
-  } catch (error) {
-    console.error('Clear errors error:', error);
-    res.status(500).json({ 
-      error: 'Failed to clear errors',
-      message: error.message 
-    });
-  }
-};
-
 // Create new stream
 const createStream = async (req, res) => {
   try {
     const { name, description, rtspUrl, latitude, longitude } = req.body;
 
+    // Validasi input
     if (!name || !rtspUrl || !latitude || !longitude) {
       return res.status(400).json({ 
         error: 'Name, RTSP URL, latitude, and longitude are required' 
       });
     }
 
+    // Bikin stream di database
     const stream = await prisma.stream.create({
       data: {
         name,
@@ -185,6 +95,7 @@ const updateStream = async (req, res) => {
     const { id } = req.params;
     const { name, description, rtspUrl, latitude, longitude } = req.body;
 
+    // Cek apakah stream exist
     const existingStream = await prisma.stream.findUnique({
       where: { id: parseInt(id) }
     });
@@ -195,6 +106,7 @@ const updateStream = async (req, res) => {
       });
     }
 
+    // Update stream
     const updatedStream = await prisma.stream.update({
       where: { id: parseInt(id) },
       data: {
@@ -225,6 +137,7 @@ const deleteStream = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Cek apakah stream exist
     const stream = await prisma.stream.findUnique({
       where: { id: parseInt(id) }
     });
@@ -235,22 +148,9 @@ const deleteStream = async (req, res) => {
       });
     }
 
-    // Stop FFmpeg if running
-    if (stream.status === 'active' && stream.processId) {
-      const { stopFFmpegProcess } = require('../utils/ffmpegHelper');
-      stopFFmpegProcess(parseInt(stream.processId));
-    }
+    // TODO: Stop FFmpeg process kalo lagi jalan (nanti kita implement)
 
-    // Delete related logs first (cascade)
-    await prisma.streamErrorLog.deleteMany({
-      where: { streamId: parseInt(id) }
-    });
-
-    await prisma.streamHealthLog.deleteMany({
-      where: { streamId: parseInt(id) }
-    });
-
-    // Delete stream
+    // Delete stream dari database
     await prisma.stream.delete({
       where: { id: parseInt(id) }
     });
@@ -268,7 +168,7 @@ const deleteStream = async (req, res) => {
   }
 };
 
-// Start stream (with enhanced error handling)
+// Start stream (trigger FFmpeg)
 const startStream = async (req, res) => {
   try {
     const { id } = req.params;
@@ -283,21 +183,24 @@ const startStream = async (req, res) => {
       });
     }
 
+    // Check if already active
     if (stream.status === 'active' && stream.processId) {
       return res.status(400).json({
         error: 'Stream is already running'
       });
     }
 
+    // Import FFmpeg helper
     const { startFFmpegProcess } = require('../utils/ffmpegHelper');
 
-    // Start FFmpeg (will handle errors internally and log to DB)
+    // Start FFmpeg process
     const ffmpegInfo = await startFFmpegProcess(stream.id, stream.rtspUrl);
 
-    // Update stream (status will be updated to 'active' after FFmpeg starts successfully)
+    // Update stream di database
     const updatedStream = await prisma.stream.update({
       where: { id: parseInt(id) },
       data: { 
+        status: 'active',
         processId: ffmpegInfo.pid.toString(),
         hlsPath: `/streams/stream_${stream.id}/stream.m3u8`
       }
@@ -305,13 +208,22 @@ const startStream = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Stream is starting...',
+      message: 'Stream started successfully',
       data: updatedStream
     });
   } catch (error) {
     console.error('Start stream error:', error);
     
-    // Error already logged in ffmpegHelper
+    // Update status jadi error
+    try {
+      await prisma.stream.update({
+        where: { id: parseInt(req.params.id) },
+        data: { status: 'error' }
+      });
+    } catch (dbError) {
+      console.error('Failed to update stream status:', dbError);
+    }
+
     res.status(500).json({ 
       error: 'Failed to start stream',
       message: error.message 
@@ -340,14 +252,20 @@ const stopStream = async (req, res) => {
       });
     }
 
-    const { stopStreamById } = require('../utils/ffmpegHelper');
+    // Stop FFmpeg process
+    const { stopFFmpegProcess } = require('../utils/ffmpegHelper');
     
     if (stream.processId) {
-      await stopStreamById(parseInt(id));
+      stopFFmpegProcess(parseInt(stream.processId));
     }
 
-    const updatedStream = await prisma.stream.findUnique({
-      where: { id: parseInt(id) }
+    // Update stream di database
+    const updatedStream = await prisma.stream.update({
+      where: { id: parseInt(id) },
+      data: { 
+        status: 'inactive',
+        processId: null
+      }
     });
 
     res.json({
@@ -364,48 +282,6 @@ const stopStream = async (req, res) => {
   }
 };
 
-// 🆕 RESTART STREAM
-const restartStream = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Stop first
-    const { stopStreamById } = require('../utils/ffmpegHelper');
-    await stopStreamById(parseInt(id));
-
-    // Wait a bit
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Start again
-    const stream = await prisma.stream.findUnique({
-      where: { id: parseInt(id) }
-    });
-
-    const { startFFmpegProcess } = require('../utils/ffmpegHelper');
-    const ffmpegInfo = await startFFmpegProcess(stream.id, stream.rtspUrl);
-
-    const updatedStream = await prisma.stream.update({
-      where: { id: parseInt(id) },
-      data: { 
-        processId: ffmpegInfo.pid.toString(),
-        hlsPath: `/streams/stream_${stream.id}/stream.m3u8`
-      }
-    });
-
-    res.json({
-      success: true,
-      message: 'Stream restarted successfully',
-      data: updatedStream
-    });
-  } catch (error) {
-    console.error('Restart stream error:', error);
-    res.status(500).json({ 
-      error: 'Failed to restart stream',
-      message: error.message 
-    });
-  }
-};
-
 module.exports = {
   getAllStreams,
   getStreamById,
@@ -413,9 +289,5 @@ module.exports = {
   updateStream,
   deleteStream,
   startStream,
-  stopStream,
-  getStreamHealth,
-  getErrorLogs,
-  clearErrors,
-  restartStream
+  stopStream
 };

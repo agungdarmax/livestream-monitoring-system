@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  email     String   @unique
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Stream {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  rtspUrl     String
+  latitude    Float
+  longitude   Float
+  status      String   @default("inactive") // active, inactive, error
+  hlsPath     String?  // path ke file .m3u8
+  processId   String?  // PM2 process ID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

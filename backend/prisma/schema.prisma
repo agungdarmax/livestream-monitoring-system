@@ -24,9 +24,61 @@ model Stream {
   rtspUrl     String
   latitude    Float
   longitude   Float
-  status      String   @default("inactive") // active, inactive, error
+  status      String   @default("inactive") // active, inactive, error, starting
   hlsPath     String?  // path ke file .m3u8
-  processId   String?  // PM2 process ID
+  processId   String?  // FFmpeg process ID
+  
+  // 🆕 ERROR TRACKING
+  errorMessage String?   // Last error message
+  lastError    DateTime? // When last error occurred
+  errorCount   Int      @default(0) // Total error count
+  
+  // 🆕 HEALTH MONITORING
+  startedAt       DateTime? // When stream started
+  uptimeSeconds   Int       @default(0) // Total uptime in seconds
+  restartCount    Int       @default(0) // How many times restarted
+  lastHealthCheck DateTime? // Last health check timestamp
+  
+  // 🆕 STREAM METRICS
+  bitrate      Int?     // Current bitrate (kbps)
+  fps          Float?   // Current FPS
+  resolution   String?  // e.g., "1280x720"
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  
+  // Relations
+  errorLogs   StreamErrorLog[]
+  healthLogs  StreamHealthLog[]
+}
+
+// 🆕 ERROR LOGS TABLE
+model StreamErrorLog {
+  id           Int      @id @default(autoincrement())
+  streamId     Int
+  errorType    String   // "connection", "encoding", "timeout", "crash", etc.
+  errorMessage String
+  stackTrace   String?  // Full error stack for debugging
+  createdAt    DateTime @default(now())
+  
+  stream Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  
+  @@index([streamId])
+  @@index([createdAt])
+}
+
+// 🆕 STREAM HEALTH HISTORY
+model StreamHealthLog {
+  id        Int      @id @default(autoincrement())
+  streamId  Int
+  status    String   // "healthy", "degraded", "down"
+  bitrate   Int?
+  fps       Float?
+  uptime    Int      // seconds
+  createdAt DateTime @default(now())
+  
+  stream Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  
+  @@index([streamId])
+  @@index([createdAt])
 }

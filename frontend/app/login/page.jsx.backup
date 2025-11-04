@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,7 +29,9 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
+        // Save token to localStorage
         localStorage.setItem('token', data.token);
+        // Redirect to dashboard
         router.push('/dashboard');
       } else {
         setError(data.error || 'Login failed');
@@ -61,25 +62,8 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Glassmorphism container */}
         <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl p-8">
-          
-          {/* 🆕 LOGO SECTION */}
+          {/* Logo/Header */}
           <div className="text-center mb-8">
-            {/* Logo Image - Replace with your actual logo */}
-            <div className="flex justify-center mb-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-2xl">
-                {/* Placeholder logo - Replace with actual logo */}
-                <span className="text-white font-bold text-4xl">R</span>
-                {/* Uncomment below when you have logo file */}
-                {/* <Image 
-                  src="/logo.png" 
-                  alt="REMARC Logo" 
-                  width={80} 
-                  height={80}
-                  className="rounded-2xl"
-                /> */}
-              </div>
-            </div>
-
             <h1 className="text-4xl font-bold text-white mb-2">
               REMARC
             </h1>
@@ -151,12 +135,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Footer Info */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-500 text-xs">
-              Secure admin access · REMARC Property Group
-            </p>
-          </div>
+          {/* ✅ REMOVED DEFAULT CREDENTIALS TEXT */}
         </div>
 
         {/* Bottom glow effect */}

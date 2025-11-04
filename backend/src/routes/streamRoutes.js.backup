@@ -8,22 +8,12 @@ const {
   updateStream,
   deleteStream,
   startStream,
-  stopStream,
-  getStreamHealth,
-  getErrorLogs,
-  clearErrors,
-  restartStream
+  stopStream
 } = require('../controllers/streamController');
 
 // Public routes (ga perlu login)
 router.get('/', getAllStreams);
 router.get('/:id', getStreamById);
-
-// 🆕 HEALTH MONITORING ROUTES (Protected)
-router.get('/:id/health', authMiddleware, getStreamHealth);
-router.get('/:id/errors', authMiddleware, getErrorLogs);
-router.post('/:id/clear-errors', authMiddleware, clearErrors);
-router.post('/:id/restart', authMiddleware, restartStream);
 
 // Protected routes (harus login)
 router.post('/', authMiddleware, createStream);
