@@ -16,6 +16,7 @@ const MapPicker = dynamic(() => import('@/components/MapPicker'), {
 
 export default function Dashboard() {
   const router = useRouter()
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [streams, setStreams] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -29,7 +30,6 @@ export default function Dashboard() {
   })
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // ✨ NEW: Preview modal state
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewStream, setPreviewStream] = useState(null)
 
@@ -46,15 +46,36 @@ export default function Dashboard() {
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
 
-
+  // 🔒 STRONGER AUTH PROTECTION
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      router.push('/login')
-      return
+    const checkAuth = () => {
+      const token = localStorage.getItem('token')
+      
+      console.log('🔐 Auth Check - Token:', token ? 'EXISTS' : 'MISSING')
+      
+      if (!token) {
+        console.log('❌ No token found - Redirecting to login')
+        toast.error('Please login first!')
+        router.replace('/login') // Use replace instead of push
+        return false
+      }
+      
+      setIsAuthenticated(true)
+      return true
     }
-    fetchStreams()
-  }, [])
+
+    const isAuth = checkAuth()
+    if (isAuth) {
+      fetchStreams()
+    }
+  }, [router])
+
+  // 🔒 PREVENT RENDERING IF NOT AUTHENTICATED
+  useEffect(() => {
+    if (!isAuthenticated && !loading) {
+      router.replace('/login')
+    }
+  }, [isAuthenticated, loading, router])
 
   const fetchStreams = async () => {
     setLoading(true)
@@ -67,30 +88,25 @@ export default function Dashboard() {
       
       if (res.ok) {
         const response = await res.json()
-        console.log('API Response:', response)
         
-        // Handle both response formats
         let data = []
         if (response.success && Array.isArray(response.data)) {
           data = response.data
         } else if (Array.isArray(response)) {
           data = response
-        } else {
-          console.error('Unexpected response format:', response)
         }
         
-        console.log('Parsed streams:', data)
         setStreams(data)
       } else if (res.status === 401) {
-        toast.error('Sesi expired! Silakan login lagi')
+        toast.error('Session expired! Please login again')
         localStorage.removeItem('token')
-        router.push('/login')
+        router.replace('/login')
       } else {
-        toast.error('Gagal mengambil data stream!')
+        toast.error('Failed to fetch streams!')
       }
     } catch (error) {
       console.error('Error fetching streams:', error)
-      toast.error('Gagal mengambil data stream!')
+      toast.error('Failed to fetch streams!')
       setStreams([])
     } finally {
       setLoading(false)
@@ -99,8 +115,8 @@ export default function Dashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem('token')
-    toast.success('Berhasil logout!')
-    router.push('/login')
+    toast.success('Logged out successfully!')
+    router.replace('/login')
   }
 
   const openModal = (stream = null) => {
@@ -138,7 +154,7 @@ export default function Dashboard() {
     e.preventDefault()
     
     if (!formData.name || !formData.rtspUrl || !formData.latitude || !formData.longitude) {
-      toast.error('Semua field wajib diisi!')
+      toast.error('All fields are required!')
       return
     }
 
@@ -146,12 +162,12 @@ export default function Dashboard() {
     const lng = parseFloat(formData.longitude)
 
     if (isNaN(lat) || isNaN(lng)) {
-      toast.error('Koordinat harus berupa angka!')
+      toast.error('Coordinates must be numbers!')
       return
     }
 
     setIsSubmitting(true)
-    const loadingToast = toast.loading(editingStream ? 'Mengupdate stream...' : 'Menambahkan stream...')
+    const loadingToast = toast.loading(editingStream ? 'Updating stream...' : 'Adding stream...')
 
     try {
       const url = editingStream 
@@ -177,25 +193,24 @@ export default function Dashboard() {
 
       if (res.ok) {
         toast.dismiss(loadingToast)
-        toast.success(editingStream ? 'Stream berhasil diupdate!' : 'Stream berhasil ditambahkan!')
+        toast.success(editingStream ? 'Stream updated successfully!' : 'Stream added successfully!')
         fetchStreams()
         closeModal()
       } else {
         const error = await res.json()
         toast.dismiss(loadingToast)
-        toast.error(error.error || 'Gagal menyimpan stream!')
+        toast.error(error.error || 'Failed to save stream!')
       }
     } catch (error) {
       toast.dismiss(loadingToast)
-      toast.error('Error saat menyimpan stream!')
+      toast.error('Error saving stream!')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // ✅ NEW: START STREAM FUNCTION
   const startStream = async (id) => {
-    const loadingToast = toast.loading('Memulai stream...')
+    const loadingToast = toast.loading('Starting stream...')
     try {
       const res = await fetch(`http://localhost:5000/api/streams/${id}/start`, {
         method: 'POST',
@@ -206,21 +221,21 @@ export default function Dashboard() {
       
       if (res.ok) {
         toast.dismiss(loadingToast)
-        toast.success('Stream berhasil dimulai!')
+        toast.success('Stream started successfully!')
         fetchStreams()
       } else {
         const error = await res.json()
         toast.dismiss(loadingToast)
-        toast.error(error.error || 'Gagal memulai stream!')
+        toast.error(error.error || 'Failed to start stream!')
       }
     } catch (error) {
       toast.dismiss(loadingToast)
-      toast.error('Error memulai stream!')
+      toast.error('Error starting stream!')
     }
   }
 
   const stopStream = async (id) => {
-    const loadingToast = toast.loading('Menghentikan stream...')
+    const loadingToast = toast.loading('Stopping stream...')
     try {
       const res = await fetch(`http://localhost:5000/api/streams/${id}/stop`, {
         method: 'POST',
@@ -231,19 +246,18 @@ export default function Dashboard() {
       
       if (res.ok) {
         toast.dismiss(loadingToast)
-        toast.success('Stream berhasil dihentikan!')
+        toast.success('Stream stopped successfully!')
         fetchStreams()
       } else {
         toast.dismiss(loadingToast)
-        toast.error('Gagal menghentikan stream!')
+        toast.error('Failed to stop stream!')
       }
     } catch (error) {
       toast.dismiss(loadingToast)
-      toast.error('Error menghentikan stream!')
+      toast.error('Error stopping stream!')
     }
   }
 
-  // ✨ NEW: Preview modal functions
   const openPreviewModal = (stream) => {
     setPreviewStream(stream)
     setShowPreviewModal(true)
@@ -254,7 +268,6 @@ export default function Dashboard() {
     setPreviewStream(null)
   }
 
-  // ✨ NEW: HLS initialization for preview
   useEffect(() => {
     if (showPreviewModal && previewStream && previewStream.status === 'active') {
       const timer = setTimeout(() => {
@@ -290,14 +303,14 @@ export default function Dashboard() {
       })
 
       if (res.ok) {
-        toast.success(`Stream "${deleteModal.streamName}" berhasil dihapus!`)
+        toast.success(`Stream "${deleteModal.streamName}" deleted successfully!`)
         fetchStreams()
         setDeleteModal({ isOpen: false, streamId: null, streamName: '' })
       } else {
-        toast.error('Gagal menghapus stream!')
+        toast.error('Failed to delete stream!')
       }
     } catch (error) {
-      toast.error('Error menghapus stream!')
+      toast.error('Error deleting stream!')
     } finally {
       setIsDeleting(false)
     }
@@ -305,7 +318,7 @@ export default function Dashboard() {
 
   const searchLocation = async () => {
     if (!searchQuery.trim()) {
-      toast.error('Masukkan nama lokasi!')
+      toast.error('Please enter a location name!')
       return
     }
 
@@ -318,10 +331,10 @@ export default function Dashboard() {
       
       if (data.length > 0) {
         setSearchResults(data)
-        toast.success(`Ditemukan ${data.length} lokasi!`)
+        toast.success(`Found ${data.length} locations!`)
       } else {
         setSearchResults([])
-        toast.error('Lokasi tidak ditemukan!')
+        toast.error('Location not found!')
       }
     } catch (error) {
       toast.error('Error searching location!')
@@ -336,7 +349,7 @@ export default function Dashboard() {
       latitude: result.lat,
       longitude: result.lon
     })
-    toast.success('Koordinat dipilih!')
+    toast.success('Coordinates selected!')
     setSearchResults([])
   }
 
@@ -346,7 +359,19 @@ export default function Dashboard() {
       latitude: lat.toString(),
       longitude: lng.toString()
     })
-    toast.success('Koordinat dipilih dari map!')
+    toast.success('Coordinates selected from map!')
+  }
+
+  // 🔒 DON'T RENDER IF NOT AUTHENTICATED
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-white text-xl font-medium">Checking authentication...</p>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {
@@ -407,7 +432,7 @@ export default function Dashboard() {
               {streams.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="px-6 py-8 text-center text-gray-400">
-                    Belum ada stream. Klik "Add Stream" untuk menambahkan!
+                    No streams yet. Click "Add Stream" to get started!
                   </td>
                 </tr>
               ) : (
@@ -429,7 +454,6 @@ export default function Dashboard() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
-                        {/* ✨ PREVIEW BUTTON - Shows when active */}
                         {stream.status === 'active' && (
                           <button
                             onClick={() => openPreviewModal(stream)}
@@ -439,7 +463,6 @@ export default function Dashboard() {
                           </button>
                         )}
                         
-                        {/* ✅ START BUTTON - Shows when inactive */}
                         {stream.status === 'inactive' && (
                           <button
                             onClick={() => startStream(stream.id)}
@@ -449,7 +472,6 @@ export default function Dashboard() {
                           </button>
                         )}
                         
-                        {/* STOP BUTTON - Shows when active */}
                         {stream.status === 'active' && (
                           <button
                             onClick={() => stopStream(stream.id)}
@@ -550,6 +572,70 @@ export default function Dashboard() {
                   </div>
                 )}
 
+                {coordMode === 'search' && (
+                  <div className="space-y-4">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Search location... (e.g. Sanur, Bali)"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), searchLocation())}
+                        className="flex-1 px-4 py-2 rounded-lg bg-white/5 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={searchLocation}
+                        disabled={isSearching}
+                        className="px-6 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {isSearching ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Searching...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            Search
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {searchResults.length > 0 && (
+                      <div className="max-h-60 overflow-y-auto space-y-2 backdrop-blur-xl bg-white/5 border border-white/20 rounded-lg p-3">
+                        {searchResults.map((result, index) => (
+                          <div
+                            key={index}
+                            onClick={() => selectSearchResult(result)}
+                            className="p-3 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition border border-white/10"
+                          >
+                            <p className="text-white font-medium text-sm">{result.display_name}</p>
+                            <p className="text-gray-400 text-xs mt-1">
+                              📍 {parseFloat(result.lat).toFixed(5)}, {parseFloat(result.lon).toFixed(5)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {formData.latitude && formData.longitude && (
+                      <div className="backdrop-blur-xl bg-green-500/10 border border-green-500/50 rounded-lg p-3">
+                        <p className="text-green-400 text-sm font-medium">✓ Coordinates selected:</p>
+                        <p className="text-white text-xs mt-1 font-mono">
+                          {parseFloat(formData.latitude).toFixed(6)}, {parseFloat(formData.longitude).toFixed(6)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {coordMode === 'map' && (
                   <MapPicker
                     latitude={formData.latitude ? parseFloat(formData.latitude) : -8.670458}
@@ -570,11 +656,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ✨ PREVIEW MODAL */}
       {showPreviewModal && previewStream && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
             <div className="flex justify-between items-center p-6 border-b border-white/10">
               <div>
                 <h3 className="text-2xl font-bold text-white">{previewStream.name}</h3>
@@ -590,7 +674,6 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {/* Modal Body - Video Player */}
             <div className="p-6">
               {previewStream.status === 'active' && previewStream.hlsPath ? (
                 <div className="bg-black rounded-lg overflow-hidden">
@@ -605,7 +688,6 @@ export default function Dashboard() {
                     Your browser does not support video playback.
                   </video>
                   
-                  {/* Status Bar */}
                   <div className="bg-gray-900/50 backdrop-blur-sm p-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
@@ -626,7 +708,6 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Stream Info */}
               <div className="mt-6 grid grid-cols-2 gap-4">
                 <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-lg p-4">
                   <p className="text-gray-400 text-xs uppercase mb-1">Status</p>
@@ -643,7 +724,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Modal Footer */}
             <div className="flex justify-end gap-3 p-6 border-t border-white/10">
               <button
                 onClick={closePreviewModal}
@@ -660,12 +740,11 @@ export default function Dashboard() {
         isOpen={deleteModal.isOpen}
         onClose={() => setDeleteModal({ isOpen: false, streamId: null, streamName: '' })}
         onConfirm={handleDeleteConfirm}
-        title="Hapus Stream?"
-        message={`Yakin mau hapus stream "${deleteModal.streamName}"?`}
+        title="Delete Stream?"
+        message={`Are you sure you want to delete "${deleteModal.streamName}"?`}
         isLoading={isDeleting}
       />
       
-      {/* HLS.js library */}
       <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     </div>
   )

@@ -26,7 +26,7 @@ export default function MapPicker({ latitude, longitude, onLocationSelect }) {
     const map = L.map(mapRef.current, {
       center: [latitude, longitude],
       zoom: 13,
-      zoomControl: true,
+      zoomControl: true, // ✅ KEEP default zoom controls
       scrollWheelZoom: true,
     });
 
@@ -84,8 +84,14 @@ export default function MapPicker({ latitude, longitude, onLocationSelect }) {
         className="h-96 rounded-lg border border-gray-600 overflow-hidden"
         style={{ zIndex: 1 }}
       />
-      <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-lg text-sm font-medium z-10">
-        📍 {latitude.toFixed(5)}, {longitude.toFixed(5)}
+      
+      {/* ✅ REMOVED: Coordinate display that was blocking zoom controls */}
+      {/* Now showing coordinates below the map instead */}
+      
+      <div className="mt-3 text-center">
+        <span className="text-gray-400 text-sm">
+          📍 Selected: <span className="text-white font-mono">{latitude.toFixed(5)}, {longitude.toFixed(5)}</span>
+        </span>
       </div>
     </div>
   );

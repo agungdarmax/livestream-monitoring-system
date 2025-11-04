@@ -135,12 +135,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Footer Info */}
-          <div className="mt-8 text-center">
-            <p className="text-xs text-gray-500">
-              Default: admin / Bali2025
-            </p>
-          </div>
+          {/* ✅ REMOVED DEFAULT CREDENTIALS TEXT */}
         </div>
 
         {/* Bottom glow effect */}
