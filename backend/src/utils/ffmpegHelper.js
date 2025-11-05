@@ -4,29 +4,47 @@ const fs = require('fs').promises;
 const logger = require('./logger');
 const prisma = require('../config/prisma');
 
-// Path ke folder streams output
 const STREAMS_DIR = path.join(__dirname, '../../streams');
-
-// Store active FFmpeg processes with health info
 const activeProcesses = new Map();
-
-// Health check interval (every 30 seconds)
 const HEALTH_CHECK_INTERVAL = 30000;
 
-// Fungsi buat ensure folder exists
-const ensureStreamDir = async (streamId) => {
+// 🔧 FIX: ENSURE DIRECTORY EXISTS SYNCHRONOUSLY BEFORE FFMPEG
+const ensureStreamDirSync = (streamId) => {
   const streamDir = path.join(STREAMS_DIR, `stream_${streamId}`);
+  
   try {
-    await fs.mkdir(streamDir, { recursive: true });
-    logger.info(`Stream directory created: ${streamDir}`);
+    // Use synchronous method to ensure directory exists BEFORE FFmpeg starts
+    const fsSync = require('fs');
+    
+    if (!fsSync.existsSync(streamDir)) {
+      fsSync.mkdirSync(streamDir, { recursive: true });
+      logger.info(`✅ Stream directory created: ${streamDir}`);
+    } else {
+      logger.info(`✅ Stream directory already exists: ${streamDir}`);
+    }
+    
     return streamDir;
   } catch (error) {
-    logger.error('Error creating stream directory:', error);
+    logger.error(`❌ Error creating stream directory: ${error.message}`);
     throw error;
   }
 };
 
-// 🆕 LOG ERROR TO DATABASE
+// Clean old segments in directory
+const cleanOldSegments = async (streamDir) => {
+  try {
+    const files = await fs.readdir(streamDir);
+    for (const file of files) {
+      if (file.endsWith('.ts') || file.endsWith('.m3u8')) {
+        await fs.unlink(path.join(streamDir, file));
+      }
+    }
+    logger.info(`Cleaned old segments in ${streamDir}`);
+  } catch (err) {
+    logger.warn(`Could not clean old segments: ${err.message}`);
+  }
+};
+
 const logStreamError = async (streamId, errorType, errorMessage, stackTrace = null) => {
   try {
     await prisma.streamErrorLog.create({
@@ -38,7 +56,6 @@ const logStreamError = async (streamId, errorType, errorMessage, stackTrace = nu
       }
     });
 
-    // Update stream error info
     await prisma.stream.update({
       where: { id: streamId },
       data: {
@@ -57,7 +74,6 @@ const logStreamError = async (streamId, errorType, errorMessage, stackTrace = nu
   }
 };
 
-// 🆕 LOG HEALTH STATUS
 const logHealthStatus = async (streamId, status, metrics = {}) => {
   try {
     await prisma.streamHealthLog.create({
@@ -84,23 +100,19 @@ const logHealthStatus = async (streamId, status, metrics = {}) => {
   }
 };
 
-// 🆕 PARSE FFMPEG STATS FROM STDERR
 const parseFFmpegStats = (data) => {
   const stats = {};
   
-  // Parse bitrate: "bitrate=2500.0kbits/s"
   const bitrateMatch = data.match(/bitrate=\s*([\d.]+)kbits\/s/);
   if (bitrateMatch) {
     stats.bitrate = Math.round(parseFloat(bitrateMatch[1]));
   }
   
-  // Parse FPS: "fps=30"
   const fpsMatch = data.match(/fps=\s*([\d.]+)/);
   if (fpsMatch) {
     stats.fps = parseFloat(fpsMatch[1]);
   }
   
-  // Parse speed: "speed=1.0x"
   const speedMatch = data.match(/speed=\s*([\d.]+)x/);
   if (speedMatch) {
     stats.speed = parseFloat(speedMatch[1]);
@@ -109,7 +121,6 @@ const parseFFmpegStats = (data) => {
   return stats;
 };
 
-// 🆕 HEALTH CHECK FOR ACTIVE STREAMS
 const healthCheck = async (streamId) => {
   const processInfo = activeProcesses.get(streamId);
   if (!processInfo) return;
@@ -117,11 +128,10 @@ const healthCheck = async (streamId) => {
   try {
     const uptime = Math.floor((Date.now() - processInfo.startTime) / 1000);
     
-    // Check if process is still running
+    // Check if process still exists
     try {
-      process.kill(processInfo.pid, 0); // Signal 0 checks if process exists
+      process.kill(processInfo.pid, 0);
     } catch (err) {
-      // Process not found - stream crashed!
       logger.error(`Health check: Stream ${streamId} process died unexpectedly`);
       await logStreamError(
         streamId,
@@ -141,7 +151,6 @@ const healthCheck = async (streamId) => {
       const stats = await fs.stat(m3u8Path);
       const fileAge = Date.now() - stats.mtimeMs;
       
-      // If m3u8 hasn't been updated in 30 seconds, something's wrong
       if (fileAge > 30000) {
         logger.warn(`Health check: Stream ${streamId} m3u8 file stale (${Math.floor(fileAge/1000)}s old)`);
         await logHealthStatus(streamId, 'degraded', {
@@ -156,15 +165,14 @@ const healthCheck = async (streamId) => {
       return;
     }
 
-    // Stream is healthy!
+    // Stream is healthy
     await logHealthStatus(streamId, 'healthy', {
       uptime,
       bitrate: processInfo.lastStats?.bitrate,
       fps: processInfo.lastStats?.fps,
-      resolution: '1280x720' // From FFmpeg args
+      resolution: '1280x720'
     });
 
-    // Update uptime in database
     await prisma.stream.update({
       where: { id: streamId },
       data: { uptimeSeconds: uptime }
@@ -176,26 +184,31 @@ const healthCheck = async (streamId) => {
   }
 };
 
-// Start FFmpeg process with enhanced error handling
+// 🔧 FIXED: START FFMPEG WITH PROPER INITIALIZATION
 const startFFmpegProcess = async (streamId, rtspUrl) => {
   try {
-    const streamDir = await ensureStreamDir(streamId);
+    // 🆕 STEP 1: CREATE DIRECTORY SYNCHRONOUSLY FIRST (CRITICAL FIX!)
+    logger.info(`📁 [Stream ${streamId}] Step 1: Creating stream directory...`);
+    const streamDir = ensureStreamDirSync(streamId);
     const outputPath = path.join(streamDir, 'stream.m3u8');
+    
+    logger.info(`✅ [Stream ${streamId}] Directory ready: ${streamDir}`);
 
-    // Clean old segments before starting
+    // 🆕 STEP 2: CLEAN OLD SEGMENTS
+    logger.info(`🧹 [Stream ${streamId}] Step 2: Cleaning old segments...`);
+    await cleanOldSegments(streamDir);
+    
+    // 🆕 STEP 3: VERIFY DIRECTORY IS WRITABLE
     try {
-      const files = await fs.readdir(streamDir);
-      for (const file of files) {
-        if (file.endsWith('.ts') || file.endsWith('.m3u8')) {
-          await fs.unlink(path.join(streamDir, file));
-        }
-      }
-      logger.info(`Cleaned old segments for stream ${streamId}`);
-    } catch (err) {
-      logger.warn(`Could not clean old segments: ${err.message}`);
+      const testFile = path.join(streamDir, '.test');
+      await fs.writeFile(testFile, 'test');
+      await fs.unlink(testFile);
+      logger.info(`✅ [Stream ${streamId}] Directory is writable`);
+    } catch (writeError) {
+      throw new Error(`Directory not writable: ${writeError.message}`);
     }
 
-    // Update status to "starting"
+    // 🆕 STEP 4: UPDATE STATUS TO "STARTING"
     await prisma.stream.update({
       where: { id: streamId },
       data: { 
@@ -204,8 +217,10 @@ const startFFmpegProcess = async (streamId, rtspUrl) => {
         startedAt: new Date()
       }
     });
+    
+    logger.info(`🚀 [Stream ${streamId}] Step 3: Starting FFmpeg process...`);
 
-    // FFmpeg args (same as before)
+    // FFmpeg arguments (optimized for low latency)
     const ffmpegArgs = [
       '-loglevel', 'warning',
       '-rtsp_transport', 'tcp',
@@ -251,7 +266,7 @@ const startFFmpegProcess = async (streamId, rtspUrl) => {
 
     const ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
 
-    // Store process info with health tracking
+    // Store process info
     const processInfo = {
       process: ffmpegProcess,
       pid: ffmpegProcess.pid,
@@ -264,7 +279,7 @@ const startFFmpegProcess = async (streamId, rtspUrl) => {
 
     activeProcesses.set(streamId, processInfo);
 
-    // 🆕 START HEALTH CHECK
+    // Start health check
     processInfo.healthCheckInterval = setInterval(() => {
       healthCheck(streamId);
     }, HEALTH_CHECK_INTERVAL);
@@ -274,12 +289,12 @@ const startFFmpegProcess = async (streamId, rtspUrl) => {
       logger.debug(`FFmpeg stdout [${streamId}]: ${data}`);
     });
 
-    // Handle stderr (FFmpeg outputs stats here)
+    // Handle stderr (FFmpeg stats)
     ffmpegProcess.stderr.on('data', (data) => {
       const message = data.toString();
       processInfo.errorBuffer += message;
       
-      // Parse stats for health monitoring
+      // Parse stats
       const stats = parseFFmpegStats(message);
       if (Object.keys(stats).length > 0) {
         processInfo.lastStats = { ...processInfo.lastStats, ...stats };
@@ -296,17 +311,15 @@ const startFFmpegProcess = async (streamId, rtspUrl) => {
     ffmpegProcess.on('close', async (code) => {
       logger.warn(`FFmpeg process [${streamId}] exited with code ${code}`);
       
-      // Clear health check
       if (processInfo.healthCheckInterval) {
         clearInterval(processInfo.healthCheckInterval);
       }
       
       activeProcesses.delete(streamId);
       
-      // Log error if crashed
       if (code !== 0) {
         const errorMsg = `FFmpeg exited with code ${code}`;
-        const lastErrors = processInfo.errorBuffer.slice(-1000); // Last 1000 chars
+        const lastErrors = processInfo.errorBuffer.slice(-1000);
         
         await logStreamError(
           streamId,
@@ -337,10 +350,10 @@ const startFFmpegProcess = async (streamId, rtspUrl) => {
 
     logger.info(`✅ FFmpeg started for stream ${streamId} (PID: ${ffmpegProcess.pid})`);
 
-    // Wait a bit for FFmpeg to start, then update to active
+    // 🆕 STEP 5: WAIT FOR HLS OUTPUT, THEN UPDATE TO ACTIVE
     setTimeout(async () => {
       try {
-        // Check if m3u8 file exists
+        // Check if m3u8 file was created
         await fs.access(outputPath);
         
         await prisma.stream.update({
@@ -351,12 +364,12 @@ const startFFmpegProcess = async (streamId, rtspUrl) => {
           }
         });
         
-        logger.info(`Stream ${streamId} is now active`);
+        logger.info(`✅ Stream ${streamId} is now active`);
       } catch (err) {
-        logger.error(`Stream ${streamId} failed to start properly:`, err);
+        logger.error(`❌ Stream ${streamId} failed to start properly:`, err);
         await logStreamError(streamId, 'startup', 'Failed to create HLS output', err.message);
       }
-    }, 3000);
+    }, 5000); // Wait 5 seconds for FFmpeg to initialize
 
     return {
       process: ffmpegProcess,
@@ -365,27 +378,24 @@ const startFFmpegProcess = async (streamId, rtspUrl) => {
       streamDir: streamDir
     };
   } catch (error) {
-    logger.error('Error starting FFmpeg:', error);
+    logger.error(`❌ Error starting FFmpeg for stream ${streamId}:`, error);
     await logStreamError(streamId, 'startup_error', error.message, error.stack);
     throw error;
   }
 };
 
-// Stop FFmpeg process
 const stopFFmpegProcess = (processId) => {
   try {
     if (processId) {
-      // Try graceful shutdown first
       process.kill(processId, 'SIGTERM');
       logger.info(`Sent SIGTERM to FFmpeg process: ${processId}`);
       
-      // Force kill after 5 seconds if still running
       setTimeout(() => {
         try {
           process.kill(processId, 'SIGKILL');
           logger.warn(`Sent SIGKILL to FFmpeg process: ${processId}`);
         } catch (err) {
-          // Process already dead, ignore
+          // Process already dead
         }
       }, 5000);
       
@@ -402,13 +412,11 @@ const stopFFmpegProcess = (processId) => {
   }
 };
 
-// Stop stream by stream ID
 const stopStreamById = async (streamId) => {
   const processInfo = activeProcesses.get(streamId);
   if (processInfo) {
     logger.info(`Stopping stream ${streamId} (PID: ${processInfo.pid})`);
     
-    // Clear health check
     if (processInfo.healthCheckInterval) {
       clearInterval(processInfo.healthCheckInterval);
     }
@@ -417,7 +425,6 @@ const stopStreamById = async (streamId) => {
     if (result) {
       activeProcesses.delete(streamId);
       
-      // Calculate final uptime
       const uptime = Math.floor((Date.now() - processInfo.startTime) / 1000);
       await prisma.stream.update({
         where: { id: streamId },
@@ -433,10 +440,8 @@ const stopStreamById = async (streamId) => {
   return false;
 };
 
-// Get stream health info
 const getStreamHealth = async (streamId) => {
   try {
-    // Get recent health logs (last 24 hours)
     const healthLogs = await prisma.streamHealthLog.findMany({
       where: {
         streamId,
@@ -448,7 +453,6 @@ const getStreamHealth = async (streamId) => {
       take: 100
     });
 
-    // Get recent errors (last 7 days)
     const errorLogs = await prisma.streamErrorLog.findMany({
       where: {
         streamId,
@@ -460,13 +464,11 @@ const getStreamHealth = async (streamId) => {
       take: 50
     });
 
-    // Calculate uptime percentage
     const healthyCount = healthLogs.filter(log => log.status === 'healthy').length;
     const uptimePercentage = healthLogs.length > 0 
       ? Math.round((healthyCount / healthLogs.length) * 100) 
       : 0;
 
-    // Get current stream info
     const stream = await prisma.stream.findUnique({
       where: { id: streamId }
     });
@@ -492,7 +494,6 @@ const getStreamHealth = async (streamId) => {
   }
 };
 
-// Get active processes info
 const getActiveProcesses = () => {
   const processes = [];
   for (const [streamId, info] of activeProcesses.entries()) {
@@ -508,7 +509,6 @@ const getActiveProcesses = () => {
   return processes;
 };
 
-// Cleanup all streams on shutdown
 const cleanupAllStreams = () => {
   logger.info('Cleaning up all active FFmpeg processes...');
   for (const [streamId, info] of activeProcesses.entries()) {
@@ -520,7 +520,6 @@ const cleanupAllStreams = () => {
   activeProcesses.clear();
 };
 
-// Handle graceful shutdown
 process.on('SIGTERM', cleanupAllStreams);
 process.on('SIGINT', cleanupAllStreams);
 
