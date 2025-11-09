@@ -1,11 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 export default function LoginPage() {
   const router = useRouter();
+  
+  // Check if already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
+
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -62,21 +71,13 @@ export default function LoginPage() {
         {/* Glassmorphism container */}
         <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl p-8">
           
-          {/* 🆕 LOGO SECTION */}
+          {/* LOGO SECTION */}
           <div className="text-center mb-8">
             {/* Logo Image - Replace with your actual logo */}
             <div className="flex justify-center mb-4">
               <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-2xl">
                 {/* Placeholder logo - Replace with actual logo */}
                 <span className="text-white font-bold text-4xl">R</span>
-                {/* Uncomment below when you have logo file */}
-                {/* <Image 
-                  src="/logo.png" 
-                  alt="REMARC Logo" 
-                  width={80} 
-                  height={80}
-                  className="rounded-2xl"
-                /> */}
               </div>
             </div>
 

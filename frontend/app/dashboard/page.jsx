@@ -22,18 +22,15 @@ export default function Dashboard() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
-  // 🆕 AUTO-REFRESH (FIXED ON - NO TOGGLE)
   const [lastRefresh, setLastRefresh] = useState(new Date())
   
-  // 🆕 DETAIL MODAL
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailStream, setDetailStream] = useState(null)
-  const [detailTab, setDetailTab] = useState('info') // info, preview, health
+  const [detailTab, setDetailTab] = useState('info')
   const [healthData, setHealthData] = useState(null)
   const [loadingHealth, setLoadingHealth] = useState(false)
   const [isEditingDetail, setIsEditingDetail] = useState(false)
   
-  // DELETE MODAL
   const [deleteModal, setDeleteModal] = useState({ 
     isOpen: false, 
     streamId: null, 
@@ -54,18 +51,16 @@ export default function Dashboard() {
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
 
-  // 🆕 AUTO-REFRESH FIXED (5 SECONDS)
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
       const interval = setInterval(() => {
-        fetchStreams(true) // Silent refresh
+        fetchStreams(true)
       }, 5000)
 
       return () => clearInterval(interval)
     }
   }, [isAuthenticated, authLoading])
 
-  // Initial fetch
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
       fetchStreams()
@@ -107,14 +102,12 @@ export default function Dashboard() {
     }
   }
 
-  // 🆕 OPEN DETAIL MODAL
   const openDetailModal = async (stream, tab = 'info') => {
     setDetailStream(stream)
     setDetailTab(tab)
     setShowDetailModal(true)
     setIsEditingDetail(false)
     
-    // Prefill form for editing
     setFormData({
       name: stream.name,
       description: stream.description || '',
@@ -123,7 +116,6 @@ export default function Dashboard() {
       longitude: stream.longitude.toString()
     })
     
-    // Load health data if tab is health
     if (tab === 'health') {
       await fetchHealthData(stream.id)
     }
@@ -160,7 +152,6 @@ export default function Dashboard() {
     }
   }
 
-  // Switch tab in detail modal
   const switchDetailTab = async (tab) => {
     setDetailTab(tab)
     if (tab === 'health' && !healthData) {
@@ -176,34 +167,13 @@ export default function Dashboard() {
     return `${minutes}m`
   }
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Never'
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffMs = now - date
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-    
-    if (diffMins < 1) return 'Just now'
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    if (diffDays < 7) return `${diffDays}d ago`
-    return date.toLocaleDateString()
-  }
-
-  // 🆕 IMPROVED STATUS BADGE
   const getStatusBadge = (status) => {
     const configs = {
       active: {
         bg: 'bg-green-500/20',
         text: 'text-green-400',
         border: 'border-green-500/50',
-        icon: (
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-            <circle cx="10" cy="10" r="8"/>
-          </svg>
-        ),
+        icon: '🟢',
         label: 'Live',
         pulse: true
       },
@@ -211,11 +181,7 @@ export default function Dashboard() {
         bg: 'bg-gray-500/20',
         text: 'text-gray-400',
         border: 'border-gray-500/50',
-        icon: (
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-            <circle cx="10" cy="10" r="8"/>
-          </svg>
-        ),
+        icon: '⚫',
         label: 'Offline',
         pulse: false
       },
@@ -223,11 +189,7 @@ export default function Dashboard() {
         bg: 'bg-red-500/20',
         text: 'text-red-400',
         border: 'border-red-500/50',
-        icon: (
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        ),
+        icon: '🔴',
         label: 'Error',
         pulse: true
       },
@@ -235,11 +197,7 @@ export default function Dashboard() {
         bg: 'bg-yellow-500/20',
         text: 'text-yellow-400',
         border: 'border-yellow-500/50',
-        icon: (
-          <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        ),
+        icon: '🟡',
         label: 'Starting',
         pulse: true
       }
@@ -248,7 +206,7 @@ export default function Dashboard() {
     const config = configs[status] || configs.inactive
     
     return (
-      <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${config.bg} ${config.text} ${config.border}`}>
+      <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${config.bg} ${config.text} ${config.border}`}>
         <span className={config.pulse ? 'animate-pulse' : ''}>{config.icon}</span>
         {config.label}
       </span>
@@ -326,7 +284,6 @@ export default function Dashboard() {
     }
   }
 
-  // 🆕 HANDLE EDIT FROM DETAIL MODAL
   const handleSubmitEdit = async (e) => {
     e.preventDefault()
     
@@ -368,7 +325,6 @@ export default function Dashboard() {
         setIsEditingDetail(false)
         fetchStreams()
         
-        // Update detail stream data
         const updatedStream = { ...detailStream, ...formData, latitude: lat, longitude: lng }
         setDetailStream(updatedStream)
       } else {
@@ -384,12 +340,10 @@ export default function Dashboard() {
     }
   }
 
-  // 🆕 TOGGLE START/STOP (ONE BUTTON!)
   const toggleStream = async (stream) => {
     const isActive = stream.status === 'active' || stream.status === 'starting'
     
     if (isActive) {
-      // STOP
       const loadingToast = toast.loading('Stopping stream...')
       try {
         const res = await fetch(`http://localhost:5000/api/streams/${stream.id}/stop`, {
@@ -412,7 +366,6 @@ export default function Dashboard() {
         toast.error('Error stopping stream!')
       }
     } else {
-      // START
       const loadingToast = toast.loading('Starting stream...')
       try {
         const res = await fetch(`http://localhost:5000/api/streams/${stream.id}/start`, {
@@ -586,7 +539,6 @@ export default function Dashboard() {
               </div>
             </div>
             
-            {/* 🆕 AUTO-REFRESH INDICATOR (NO TOGGLE) */}
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
@@ -634,11 +586,11 @@ export default function Dashboard() {
           <table className="w-full">
             <thead className="bg-white/5">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Stream Info</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Uptime</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Errors</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider w-1/4">Stream Info</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider w-1/6">Status</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider w-1/8">Uptime</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider w-1/8">Errors</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider w-1/3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
@@ -656,20 +608,7 @@ export default function Dashboard() {
                 </tr>
               ) : (
                 streams.map((stream) => (
-                  <tr key={stream.id} className="hover:bg-white/5 transition group relative">
-                    {/* 🆕 DELETE ICON TOP RIGHT */}
-                    <td colSpan="5" className="absolute top-4 right-4">
-                      <button
-                        onClick={() => setDeleteModal({ isOpen: true, streamId: stream.id, streamName: stream.name })}
-                        className="p-2 rounded-lg border border-red-500/50 text-red-400 hover:bg-red-500/20 transition opacity-0 group-hover:opacity-100"
-                        title="Delete stream"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </td>
-
+                  <tr key={stream.id} className="hover:bg-white/5 transition group">
                     {/* STREAM INFO */}
                     <td className="px-6 py-4">
                       <div className="flex items-start gap-3">
@@ -678,7 +617,7 @@ export default function Dashboard() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                           </svg>
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="text-white font-semibold mb-1">{stream.name}</p>
                           <p className="text-gray-400 text-sm mb-1 line-clamp-1">
                             {stream.description || 'No description'}
@@ -702,7 +641,7 @@ export default function Dashboard() {
                       </div>
                     </td>
 
-                    {/* UPTIME (NO RESTART COUNT) */}
+                    {/* UPTIME */}
                     <td className="px-6 py-4">
                       <div className="text-sm">
                         {stream.status === 'active' ? (
@@ -732,42 +671,51 @@ export default function Dashboard() {
                       )}
                     </td>
 
-                    {/* 🆕 ACTIONS - ONLY 3 BUTTONS */}
+                    {/* ACTIONS */}
                     <td className="px-6 py-4">
-                      <div className="flex gap-2">
-                        {/* 🆕 1. TOGGLE START/STOP */}
+                      <div className="flex items-center gap-2">
+                        {/* TOGGLE START/STOP */}
                         {(stream.status === 'active' || stream.status === 'starting') ? (
                           <button
                             onClick={() => toggleStream(stream)}
-                            className="px-4 py-2 rounded-lg border border-orange-500/50 text-orange-400 hover:bg-orange-500/10 transition text-sm font-medium"
+                            className="px-3 py-1.5 rounded-lg border border-orange-500/50 text-orange-400 hover:bg-orange-500/10 transition text-xs font-medium"
                           >
-                            ⏹️ Stop
+                            Stop
                           </button>
                         ) : (
                           <button
                             onClick={() => toggleStream(stream)}
-                            className="px-4 py-2 rounded-lg border border-green-500/50 text-green-400 hover:bg-green-500/10 transition text-sm font-medium"
+                            className="px-3 py-1.5 rounded-lg border border-green-500/50 text-green-400 hover:bg-green-500/10 transition text-xs font-medium"
                           >
-                            ▶️ Start
+                            Start
                           </button>
                         )}
                         
-                        {/* 🆕 2. RESTART */}
+                        {/* RESTART */}
                         {(stream.status === 'active' || stream.status === 'error') && (
                           <button
                             onClick={() => restartStream(stream.id)}
-                            className="px-4 py-2 rounded-lg border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 transition text-sm font-medium"
+                            className="px-3 py-1.5 rounded-lg border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 transition text-xs font-medium"
                           >
-                            🔄 Restart
+                            Restart
                           </button>
                         )}
 
-                        {/* 🆕 3. DETAIL */}
+                        {/* DETAIL */}
                         <button
                           onClick={() => openDetailModal(stream, 'info')}
-                          className="px-4 py-2 rounded-lg border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition text-sm font-medium"
+                          className="px-3 py-1.5 rounded-lg border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition text-xs font-medium"
                         >
-                          📋 Detail
+                          Detail
+                        </button>
+
+                        {/* DELETE - ICON ONLY */}
+                        <button
+                          onClick={() => setDeleteModal({ isOpen: true, streamId: stream.id, streamName: stream.name })}
+                          className="p-2 rounded-lg border border-red-500/50 text-red-400 hover:bg-red-500/10 transition"
+                          title="Delete stream"
+                        >
+                          🗑️
                         </button>
                       </div>
                     </td>
@@ -907,7 +855,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* 🆕 DETAIL MODAL WITH 3 TABS */}
+      {/* DETAIL MODAL WITH 3 TABS */}
       {showDetailModal && detailStream && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -1059,42 +1007,44 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* PREVIEW TAB */}
+              {/* PREVIEW TAB - SELALU TAMPIL */}
               {detailTab === 'preview' && (
                 <div>
-                  {detailStream.status === 'active' && detailStream.hlsPath ? (
-                    <div className="bg-black rounded-lg overflow-hidden">
-                      <video 
-                        id={`detail-video-${detailStream.id}`}
-                        controls
-                        autoPlay
-                        muted
-                        className="w-full h-auto"
-                        style={{ maxHeight: '500px' }}
-                      >
-                        Your browser does not support video playback.
-                      </video>
-                      <div className="bg-gray-900/50 backdrop-blur-sm p-3 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                          <span className="text-green-400 text-sm font-semibold">LIVE</span>
-                        </div>
-                        <span className="text-gray-400 text-xs">HLS Stream</span>
+                  <div className="bg-black rounded-lg overflow-hidden">
+                    <video 
+                      id={`detail-video-${detailStream.id}`}
+                      controls
+                      autoPlay
+                      muted
+                      className="w-full h-auto"
+                      style={{ maxHeight: '500px' }}
+                    >
+                      Your browser does not support video playback.
+                    </video>
+                    <div className="bg-gray-900/50 backdrop-blur-sm p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${detailStream.status === 'active' ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></div>
+                        <span className={`text-sm font-semibold ${detailStream.status === 'active' ? 'text-green-400' : 'text-gray-400'}`}>
+                          {detailStream.status === 'active' ? 'LIVE' : 'OFFLINE'}
+                        </span>
                       </div>
+                      <span className="text-gray-400 text-xs">HLS Stream</span>
                     </div>
-                  ) : (
-                    <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-lg p-12 text-center">
-                      <svg className="w-24 h-24 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                      <p className="text-gray-400 text-lg">Preview Not Available</p>
-                      <p className="text-gray-500 text-sm mt-2">
-                        {detailStream.status === 'inactive' ? 'Start the stream to view preview' : 'Stream is initializing...'}
+                  </div>
+                  
+                  <div className="mt-4 backdrop-blur-xl bg-white/5 border border-white/10 rounded-lg p-4">
+                    <p className="text-gray-400 text-xs uppercase mb-1">RTSP URL</p>
+                    <p className="text-white font-mono text-sm break-all">{detailStream.rtspUrl}</p>
+                  </div>
+                  
+                  {detailStream.status !== 'active' && (
+                    <div className="mt-4 backdrop-blur-xl bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-center">
+                      <p className="text-yellow-400 text-sm">
+                        ⚠️ Stream is offline. Preview will show last frame or black screen.
                       </p>
-                      <div className="mt-6 backdrop-blur-xl bg-white/5 border border-white/10 rounded-lg p-4 text-left">
-                        <p className="text-gray-400 text-xs uppercase mb-1">RTSP URL</p>
-                        <p className="text-white font-mono text-sm break-all">{detailStream.rtspUrl}</p>
-                      </div>
+                      <p className="text-gray-400 text-xs mt-1">
+                        Start the stream to see live video
+                      </p>
                     </div>
                   )}
                 </div>
