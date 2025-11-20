@@ -39,6 +39,7 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
+        document.cookie = `token=${data.token}; path=/; max-age=604800; secure; samesite=strict`
         localStorage.setItem('token', data.token);
         router.push('/dashboard');
       } else {

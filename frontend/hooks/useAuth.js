@@ -61,6 +61,7 @@ export function useAuth(requireAuth = true) {
   }
 
   const logout = () => {
+    document.cookie = 'token=; path=/; max-age=0'
     localStorage.removeItem('token')
     setIsAuthenticated(false)
     setUser(null)
